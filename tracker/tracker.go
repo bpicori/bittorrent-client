@@ -1,9 +1,10 @@
 package tracker
 
 import (
+	"bittorrent-client/config"
+	"bittorrent-client/peer"
 	"bittorrent-client/torrentfile"
 	"io"
-	"math/rand"
 	"net"
 	"net/http"
 	"net/url"
@@ -13,16 +14,8 @@ import (
 	"github.com/IncSW/go-bencode"
 )
 
-const PORT = 6881
-
-type Peer struct {
-	ID   []byte
-	IP   net.IP
-	Port int64
-}
-
-func GetPeers(file torrentfile.TorrentFile) ([]Peer, error) {
-	peers := []Peer{}
+func GetPeers(file torrentfile.TorrentFile) ([]peer.Peer, error) {
+	peers := []peer.Peer{}
 	c := &http.Client{Timeout: 15 * time.Second}
 
 	url, err := trackerUrl(file)
@@ -46,13 +39,13 @@ func GetPeers(file torrentfile.TorrentFile) ([]Peer, error) {
 	peersRaw := rawMap["peers"].([]interface{})
 	for _, e := range peersRaw {
 		eMap := e.(map[string]interface{})
-		p := Peer{}
+
+		p := peer.Peer{}
 		p.ID = eMap["peer id"].([]byte)
 		p.Port = eMap["port"].(int64)
-		p.IP = net.IP(eMap["ip"].([]byte))
+		p.IP = net.ParseIP(string(eMap["ip"].([]byte)))
 
 		peers = append(peers, p)
-
 	}
 
 	return peers, nil
@@ -65,8 +58,8 @@ func trackerUrl(file torrentfile.TorrentFile) (string, error) {
 	}
 	params := url.Values{
 		"info_hash":  []string{string(file.Info.Hash[:])},
-		"peer_id":    []string{generateClientId()},
-		"port":       []string{strconv.Itoa(int(PORT))},
+		"peer_id":    []string{config.ClientID},
+		"port":       []string{strconv.Itoa(int(config.Port))},
 		"uploaded":   []string{"0"},
 		"downloaded": []string{"0"},
 		"compact":    []string{"1"},
@@ -74,13 +67,4 @@ func trackerUrl(file torrentfile.TorrentFile) (string, error) {
 	}
 	base.RawQuery = params.Encode()
 	return base.String(), nil
-}
-
-func generateClientId() string {
-	const letterBytes = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	b := make([]byte, 20)
-	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
-	}
-	return string(b)
 }
